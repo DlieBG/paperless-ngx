@@ -13,6 +13,7 @@
     }
   ],
   "name": "Paperless-ngx",
-  "short_name": "Paperless-ngx",
+  "short_name": "Paperless",
+  "theme_color": "#17541f",
   "start_url": "/"
 }

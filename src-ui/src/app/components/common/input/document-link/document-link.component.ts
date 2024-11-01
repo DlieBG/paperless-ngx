@@ -114,7 +114,7 @@ export class DocumentLinkComponent
 
   unselect(document: Document): void {
     this.selectedDocuments = this.selectedDocuments.filter(
-      (d) => d.id !== document.id
+      (d) => d && d.id !== document.id
     )
     this.onChange(this.selectedDocuments.map((d) => d.id))
   }

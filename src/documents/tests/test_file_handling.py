@@ -150,7 +150,7 @@ class TestFileHandling(DirectoriesMixin, FileSystemAssertsMixin, TestCase):
 
         with (
             mock.patch(
-                "documents.signals.handlers.Document.objects.filter",
+                "documents.signals.handlers.Document.global_objects.filter",
             ) as m,
             disable_auditlog(),
         ):
@@ -527,6 +527,48 @@ class TestFileHandling(DirectoriesMixin, FileSystemAssertsMixin, TestCase):
             self.assertNotEqual(original_modified, doc.modified)
             mock_move.assert_not_called()
 
+    @override_settings(
+        FILENAME_FORMAT="{{title}}_{{custom_fields|get_cf_value('test')}}",
+    )
+    @mock.patch("documents.signals.handlers.update_filename_and_move_files")
+    def test_select_cf_updated(self, m):
+        """
+        GIVEN:
+            - A document with a select type custom field
+        WHEN:
+            - The custom field select options are updated
+        THEN:
+            - The update_filename_and_move_files handler is called and the document filename is updated
+        """
+        cf = CustomField.objects.create(
+            name="test",
+            data_type=CustomField.FieldDataType.SELECT,
+            extra_data={
+                "select_options": ["apple", "banana", "cherry"],
+            },
+        )
+        doc = Document.objects.create(
+            title="document",
+            filename="document.pdf",
+            archive_filename="document.pdf",
+            checksum="A",
+            archive_checksum="B",
+            mime_type="application/pdf",
+        )
+        CustomFieldInstance.objects.create(field=cf, document=doc, value_select=0)
+
+        self.assertEqual(generate_filename(doc), "document_apple.pdf")
+
+        # handler should not have been called
+        self.assertEqual(m.call_count, 0)
+        cf.extra_data = {
+            "select_options": ["aubergine", "banana", "cherry"],
+        }
+        cf.save()
+        self.assertEqual(generate_filename(doc), "document_aubergine.pdf")
+        # handler should have been called
+        self.assertEqual(m.call_count, 1)
+
 
 class TestFileHandlingWithArchive(DirectoriesMixin, FileSystemAssertsMixin, TestCase):
     @override_settings(FILENAME_FORMAT=None)
@@ -823,7 +865,9 @@ class TestFileHandlingWithArchive(DirectoriesMixin, FileSystemAssertsMixin, Test
             archive_filename="0000001.pdf",
             archive_checksum="B",
         )
-        with mock.patch("documents.signals.handlers.Document.objects.filter") as m:
+        with mock.patch(
+            "documents.signals.handlers.Document.global_objects.filter",
+        ) as m:
             m.side_effect = DatabaseError()
             doc.save()
 
@@ -918,17 +962,27 @@ class TestFilenameGeneration(DirectoriesMixin, TestCase):
             - the generated filename uses the defined storage path for the document
             - the generated filename does not include "none" in the place undefined field
         """
+        sp = StoragePath.objects.create(
+            path="TestFolder/{{asn}}/{{created}}",
+        )
         doc = Document.objects.create(
             title="does not matter",
             created=timezone.make_aware(datetime.datetime(2020, 6, 25, 7, 36, 51, 153)),
             mime_type="application/pdf",
             pk=2,
             checksum="2",
-            storage_path=StoragePath.objects.create(
-                path="TestFolder/{{asn}}/{{created}}",
-            ),
+            storage_path=sp,
         )
         self.assertEqual(generate_filename(doc), "TestFolder/2020-06-25.pdf")
+
+        # Special case, undefined variable, then defined at the start of the template
+        # This could lead to an absolute path after we remove the leading -none-, but leave the leading /
+        # -none-/2020/ -> /2020/
+        sp.path = (
+            "{{ owner_username }}/{{ created_year }}/{{ correspondent }}/{{ title }}"
+        )
+        sp.save()
+        self.assertEqual(generate_filename(doc), "2020/does not matter.pdf")
 
     def test_multiple_doc_paths(self):
         """

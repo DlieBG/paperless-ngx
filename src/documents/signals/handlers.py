@@ -29,6 +29,7 @@ from documents.data_models import DocumentMetadataOverrides
 from documents.file_handling import create_source_path_directory
 from documents.file_handling import delete_empty_directories
 from documents.file_handling import generate_unique_filename
+from documents.models import CustomField
 from documents.models import CustomFieldInstance
 from documents.models import Document
 from documents.models import MatchingModel
@@ -347,6 +348,8 @@ def cleanup_document_deletion(sender, instance, **kwargs):
                         f"While deleting document {instance!s}, the file "
                         f"{filename} could not be deleted: {e}",
                     )
+            elif filename and not os.path.isfile(filename):
+                logger.warn(f"Expected {filename} tp exist, but it did not")
 
         delete_empty_directories(
             os.path.dirname(instance.source_path),
@@ -364,6 +367,22 @@ class CannotMoveFilesException(Exception):
     pass
 
 
+# should be disabled in /src/documents/management/commands/document_importer.py handle
+@receiver(models.signals.post_save, sender=CustomField)
+def update_cf_instance_documents(sender, instance: CustomField, **kwargs):
+    """
+    'Select' custom field instances get their end-user value (e.g. in file names) from the select_options in extra_data,
+    which is contained in the custom field itself. So when the field is changed, we (may) need to update the file names
+    of all documents that have this custom field.
+    """
+    if (
+        instance.data_type == CustomField.FieldDataType.SELECT
+    ):  # Only select fields, for now
+        for cf_instance in instance.fields.all():
+            update_filename_and_move_files(sender, cf_instance)
+
+
+# should be disabled in /src/documents/management/commands/document_importer.py handle
 @receiver(models.signals.post_save, sender=CustomFieldInstance)
 @receiver(models.signals.m2m_changed, sender=Document.tags.through)
 @receiver(models.signals.post_save, sender=Document)
@@ -444,7 +463,7 @@ def update_filename_and_move_files(
                 shutil.move(old_archive_path, instance.archive_path)
 
             # Don't save() here to prevent infinite recursion.
-            Document.objects.filter(pk=instance.pk).update(
+            Document.global_objects.filter(pk=instance.pk).update(
                 filename=instance.filename,
                 archive_filename=instance.archive_filename,
                 modified=timezone.now(),

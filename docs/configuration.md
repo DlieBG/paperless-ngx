@@ -8,17 +8,17 @@ common [OCR](#ocr) related settings and some frontend settings. If set, these wi
 preference over the settings via environment variables. If not set, the environment setting
 or applicable default will be utilized instead.
 
-- If you run paperless on docker, `paperless.conf` is not used.
-  Rather, configure paperless by copying necessary options to
-  `docker-compose.env`.
+-   If you run paperless on docker, `paperless.conf` is not used.
+    Rather, configure paperless by copying necessary options to
+    `docker-compose.env`.
 
-- If you are running paperless on anything else, paperless will search
-  for the configuration file in these locations and use the first one
-  it finds:
-  - The environment variable `PAPERLESS_CONFIGURATION_PATH`
-  - `/path/to/paperless/paperless.conf`
-  - `/etc/paperless.conf`
-  - `/usr/local/etc/paperless.conf`
+-   If you are running paperless on anything else, paperless will search
+    for the configuration file in these locations and use the first one
+    it finds:
+    -   The environment variable `PAPERLESS_CONFIGURATION_PATH`
+    -   `/path/to/paperless/paperless.conf`
+    -   `/etc/paperless.conf`
+    -   `/usr/local/etc/paperless.conf`
 
 ## Required services
 
@@ -38,7 +38,7 @@ matcher.
         `redis://<username>:<password>@<host>:<port>/<DBIndex>`
 
     [More information on securing your Redis
-    Instance](https://redis.io/docs/getting-started/#securing-redis).
+    Instance](https://redis.io/docs/latest/operate/oss_and_stack/management/security).
 
     Defaults to `redis://localhost:6379`.
 
